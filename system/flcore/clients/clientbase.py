@@ -46,6 +46,7 @@ class Client(object):
         self.batch_size = args.batch_size
         self.learning_rate = args.local_learning_rate
         self.local_epochs = args.local_epochs
+        self.huffman_size = 0
 
         # check BatchNorm
         self.has_BatchNorm = False
@@ -66,6 +67,7 @@ class Client(object):
             gamma=args.learning_rate_decay_gamma
         )
         self.learning_rate_decay = args.learning_rate_decay
+        self.entropy = None
 
 
     def load_train_data(self, batch_size=None):
@@ -73,6 +75,19 @@ class Client(object):
             batch_size = self.batch_size
         train_data = read_client_data(self.dataset, self.id, is_train=True)
         return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
+    
+    # Função para calcular a entropia dos pesos
+    def entropy_regularization(self):
+        total_entropy = 0.0
+        for param in self.model.parameters():
+            if param.requires_grad:
+                # Normaliza os pesos para criar uma distribuição discreta
+                weights = param.view(-1)
+                prob = torch.abs(weights) / torch.sum(torch.abs(weights))
+                prob = prob + 1e-10  # Evitar log(0)
+                total_entropy -= torch.sum(prob * torch.log(prob))
+        return total_entropy
+
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:

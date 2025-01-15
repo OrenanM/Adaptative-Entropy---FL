@@ -19,6 +19,7 @@ import time
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
 from threading import Thread
+from utils.get_size import calculate_huffman_model, calculate_model_size
 
 
 class FedAvg(Server):
@@ -48,6 +49,16 @@ class FedAvg(Server):
                 self.evaluate()
 
             for client in self.selected_clients:
+                if client.id == 0:
+                    print(f'client {client.id}: {client.entropy}')
+                    print(f'size model: {calculate_model_size(client.model):>4} bytes')
+                    huffman_size = calculate_huffman_model(client.model)[0]
+                    table_size = calculate_huffman_model(client.model)[1] - client.huffman_size
+                    tot = huffman_size + table_size
+                    print(f'size model (huffman): {huffman_size} bytes')
+                    print(f'size table (huffman): {table_size} bytes')
+                    print(f'size total (huffman): {tot}')
+                    client.huffman_size = calculate_huffman_model(client.model)[1]
                 client.train()
 
             # threads = [Thread(target=client.train)

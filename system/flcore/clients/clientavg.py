@@ -19,6 +19,7 @@ import copy
 import torch
 import numpy as np
 import time
+from utils.get_size import calculate_huffman_model, calculate_model_size
 from flcore.clients.clientbase import Client
 
 
@@ -47,12 +48,18 @@ class clientAVG(Client):
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
                 output = self.model(x)
-                loss = self.loss(output, y)
+
+                error = self.loss(output, y)
+                entropy = self.entropy_regularization()
+
+                loss = error + entropy
+
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
         # self.model.cpu()
+        self.entropy = entropy
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()
