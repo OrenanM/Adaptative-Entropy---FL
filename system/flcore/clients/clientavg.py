@@ -19,7 +19,7 @@ import copy
 import torch
 import numpy as np
 import time
-from utils.get_size import calculate_huffman_model, calculate_model_size
+from utils.get_size import calculate_model_size
 from flcore.clients.clientbase import Client
 
 

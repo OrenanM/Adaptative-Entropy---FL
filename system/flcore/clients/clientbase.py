@@ -79,13 +79,13 @@ class Client(object):
     # Função para calcular a entropia dos pesos
     def entropy_regularization(self):
         total_entropy = 0.0
-        for param in self.model.parameters():
-            if param.requires_grad:
-                # Normaliza os pesos para criar uma distribuição discreta
-                weights = param.view(-1)
-                prob = torch.abs(weights) / torch.sum(torch.abs(weights))
-                prob = prob + 1e-10  # Evitar log(0)
-                total_entropy -= torch.sum(prob * torch.log(prob))
+        all_weights = torch.cat([param.view(-1) for param in self.model.parameters()])
+        
+        unique, counts = torch.unique(all_weights, return_counts=True)
+        
+        probabilities = counts / torch.sum(counts)
+        total_entropy = -torch.sum(probabilities * np.log2(probabilities))
+
         return total_entropy
 
 
