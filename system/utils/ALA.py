@@ -22,6 +22,21 @@ import copy
 import random
 from torch.utils.data import DataLoader
 from typing import List, Tuple
+def calculate_entropy_with_grad(model):
+    all_params = torch.cat([param.reshape(-1) for param in model.parameters()])
+
+    # Criando os limites dos bins
+    min_val, max_val = all_params.min(), all_params.max()
+    
+    # Calculando o histograma (os valores são os centros dos bins)
+    hist = torch.histc(all_params, bins=2**4)
+    
+    # Normalizando para obter uma distribuição de probabilidade
+    hist_prob = hist / hist.sum()
+
+    # Calculando a entropia
+    entropy = -torch.sum(hist_prob * torch.log(hist_prob+1e-10))
+    return entropy
 
 class ALA:
     def __init__(self,
@@ -142,7 +157,9 @@ class ALA:
                 y = y.to(self.device)
                 optimizer.zero_grad()
                 output = model_t(x)
-                loss_value = self.loss(output, y) # modify according to the local objective
+                entropy = calculate_entropy_with_grad(model_t)
+                error = self.loss(output, y) # modify according to the local objective
+                loss_value = error + entropy
                 loss_value.backward()
 
                 # update weight in this batch

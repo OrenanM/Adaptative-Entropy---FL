@@ -68,32 +68,87 @@ class Client(object):
         )
         self.learning_rate_decay = args.learning_rate_decay
         self.entropy = None
+        self.model_quantize = None
 
+    # Função para calcular a entropia usando PyTorch
+    def calculate_entropy_with_grad(self):
+        all_params = torch.cat([
+                        param.reshape(-1)
+                        for layer in self.model.modules()
+                        if isinstance(layer, nn.Linear)  # Filtra apenas camadas lineares
+                        for param in layer.parameters()
+                    ])
+        # Criando os limites dos bins
+        min_val, max_val = all_params.min().item(), all_params.max().item()
+        
+        # Calculando o histograma (os valores são os centros dos bins)
+        hist = torch.histc(all_params, bins=2**8)
+        
+        # Normalizando para obter uma distribuição de probabilidade
+        hist_prob = hist / hist.sum()
 
+        # Calculando a entropia
+        entropy = -torch.sum(hist_prob * torch.log(hist_prob+1e-10))
+        return entropy
+    
     def load_train_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
         train_data = read_client_data(self.dataset, self.id, is_train=True)
         return DataLoader(train_data, batch_size, drop_last=True, shuffle=True)
-    
-    # Função para calcular a entropia dos pesos
-    def entropy_regularization(self):
-        total_entropy = 0.0
-        all_weights = torch.cat([param.view(-1) for param in self.model.parameters()])
-        
-        unique, counts = torch.unique(all_weights, return_counts=True)
-        
-        probabilities = counts / torch.sum(counts)
-        total_entropy = -torch.sum(probabilities * np.log2(probabilities))
-
-        return total_entropy
-
 
     def load_test_data(self, batch_size=None):
         if batch_size == None:
             batch_size = self.batch_size
         test_data = read_client_data(self.dataset, self.id, is_train=False)
         return DataLoader(test_data, batch_size, drop_last=False, shuffle=True)
+    
+    def quantize_dynamic(self):
+        """Quantiza o modelo, forma que é enviado para o servidor"""
+        net_quantized_dynamic = torch.ao.quantization.quantize_dynamic(
+            self.model,
+            {torch.nn.Linear},  # Camadas a serem quantizadas dinamicamente
+            dtype=torch.qint8  # Precisão
+        )
+        self.model_quantize = net_quantized_dynamic
+    
+    '''def dequantize_int(self):
+        model = copy.deepcopy(self.model)
+
+        for name_quantized, module_quantized in self.model_quantize.named_modules():
+            if isinstance(module_quantized, torch.ao.nn.quantized.modules.Linear):
+                for name, module in model.named_modules():
+                    if name_quantized == name:
+                        module.weight.data = module_quantized.weight().int_repr().float()
+                        #module.bias.data = module_quantized.bias().int_repr().float()
+        return model'''
+    
+    def dequantize_model(self):
+        """dequantiza o modelo, realizada no servidor"""
+        for name_quantized, module_quantized in self.model_quantize.named_modules():
+            if isinstance(module_quantized, (torch.ao.nn.quantized.modules.Linear,
+                                             torch.ao.nn.quantized.dynamic.modules.Linear)):
+                for name, module in self.model.named_modules(): 
+                    if name_quantized == name:
+                        module.weight.data = module_quantized.weight().dequantize()
+                        module.bias.data = module_quantized.bias().dequantize()
+
+    '''def dequantize_static(self, net_quantized_static):
+        """dequantiza o modelo, realizada no servidor"""
+        for name_quantized, module_quantized in net_quantized_static.named_modules():
+            if isinstance(module_quantized, 
+                         (torch.ao.nn.quantized.modules.Conv2d,
+                          torch.ao.nn.quantized.modules.Linear)):
+                for name, module in self.model.named_modules():
+                    if name_quantized == name:
+                        module.weight.data = module_quantized.weight().dequantize()
+                        module.bias.data = module_quantized.bias().dequantize()'''
+    
+    def calculate_size_model(self, model):
+        torch.save(model.state_dict(), "net.pth")
+        file_size = os.path.getsize("net.pth")
+        self.model_size = file_size
+        return self.model_size
         
     def set_parameters(self, model):
         for new_param, old_param in zip(model.parameters(), self.model.parameters()):

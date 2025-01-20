@@ -19,8 +19,8 @@ import time
 from flcore.clients.clientavg import clientAVG
 from flcore.servers.serverbase import Server
 from threading import Thread
-from utils.get_size import calculate_model_encoding, calculate_model_size
-
+from utils.get_size import calculate_model_size, calculate_model_encoding, calculate_model_quantized_size
+import numpy as np
 
 class FedAvg(Server):
     def __init__(self, args, times):
@@ -50,15 +50,6 @@ class FedAvg(Server):
 
             for client in self.selected_clients:
                 client.train()
-                if client.id == 0:
-                    print(f'client {client.id}: {client.entropy}')
-                    print(f'size model:           {calculate_model_size(client.model)} bytes')
-                    huffman_size = calculate_model_encoding(client.model)[0]
-                    table_size = calculate_model_encoding(client.model)[1]
-                    tot = huffman_size + table_size
-                    print(f'size model (huffman): {huffman_size} bytes')
-                    print(f'size table (huffman): {table_size} bytes')
-                    print(f'size total (huffman): {tot} bytes')
 
             # threads = [Thread(target=client.train)
             #            for client in self.selected_clients]
@@ -69,6 +60,16 @@ class FedAvg(Server):
             if self.dlg_eval and i%self.dlg_gap == 0:
                 self.call_dlg(i)
             self.aggregate_parameters()
+
+            size_global = calculate_model_size(client.model)
+            size_quantized = calculate_model_quantized_size(client.model)
+            size_huffman = calculate_model_encoding(client.model)
+
+            self.size_model_global.append(size_global)
+            self.size_model_global_quantized.append(size_quantized)
+            self.size_model_global_huffman.append(size_huffman)
+            self.entropy.append(client.calculate_entropy_with_grad())
+            print(self.entropy)
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])

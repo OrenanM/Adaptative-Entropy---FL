@@ -20,6 +20,7 @@ import time
 from flcore.clients.clientbase import Client
 from utils.data_utils import read_client_data
 from utils.ALA import ALA
+import torch
 
 
 class clientALA(Client):
@@ -35,6 +36,11 @@ class clientALA(Client):
                     self.rand_percent, self.layer_idx, self.eta, self.device)
 
     def train(self):
+        # Prepara a rede para quantização estática
+        self.model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')  # Escolhe o backend de quantização
+        # Preparar para quantização estática
+        net_prepared = torch.ao.quantization.prepare(self.model, inplace=False)
+
         trainloader = self.load_train_data()
         # self.model.to(self.device)
         self.model.train()
@@ -55,12 +61,19 @@ class clientALA(Client):
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
                 output = self.model(x)
-                loss = self.loss(output, y)
+                net_prepared(x)
+                error = self.loss(output, y)
+                entropy = self.calculate_entropy_with_grad()
+
+                loss = error + entropy
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
 
         # self.model.cpu()
+        print(f'entropy: {entropy}')
+        # self.model.cpu()
+        self.model_quantize = torch.ao.quantization.convert(net_prepared, inplace=False)
 
         if self.learning_rate_decay:
             self.learning_rate_scheduler.step()

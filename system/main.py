@@ -153,7 +153,8 @@ def run(args):
             # args.model = torchvision.models.googlenet(pretrained=True, aux_logits=False).to(args.device)
             # feature_dim = list(args.model.fc.parameters())[0].shape[1]
             # args.model.fc = nn.Linear(feature_dim, args.num_classes).to(args.device)
-
+        elif model_str == "VGG":
+            args.model = torchvision.models.vgg19(pretrained=False, num_classes=args.num_classes).to(args.device)
         elif model_str == "MobileNet":
             args.model = mobilenet_v2(pretrained=False, num_classes=args.num_classes).to(args.device)
             
@@ -163,7 +164,7 @@ def run(args):
             
         elif model_str == "LSTM":
             args.model = LSTMNet(hidden_dim=args.feature_dim, vocab_size=args.vocab_size, num_classes=args.num_classes).to(args.device)
-
+            
         elif model_str == "BiLSTM":
             args.model = BiLSTM_TextClassification(input_size=args.vocab_size, hidden_size=args.feature_dim, 
                                                    output_size=args.num_classes, num_layers=1, 
@@ -199,6 +200,7 @@ def run(args):
 
         # select algorithm
         if args.algorithm == "FedAvg":
+            
             args.head = copy.deepcopy(args.model.fc)
             args.model.fc = nn.Identity()
             args.model = BaseHeadSplit(args.model, args.head)
@@ -497,6 +499,8 @@ if __name__ == "__main__":
     parser.add_argument('-mo', "--momentum", type=float, default=0.1)
     parser.add_argument('-klw', "--kl_weight", type=float, default=0.0)
 
+    #Quantização 
+    parser.add_argument('-mq', "--method_quantized", type=float, default=0.0)
 
     args = parser.parse_args()
 

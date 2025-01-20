@@ -24,7 +24,8 @@ import time
 import random
 from utils.data_utils import read_client_data
 from utils.dlg import DLG
-
+from utils.get_size import calculate_model_size, calculate_model_encoding, calculate_model_quantized_size
+import torch.nn as nn
 
 class Server(object):
     def __init__(self, args, times):
@@ -79,6 +80,15 @@ class Server(object):
         self.eval_new_clients = False
         self.fine_tuning_epoch_new = args.fine_tuning_epoch_new
 
+        self.size_model_global = []
+        self.size_model_global_huffman = []
+        self.size_model_global_quantized = []
+
+        self.size_client_global = []
+        self.size_client_global_huffman = []
+        self.size_client_global_quantized = []
+        self.entropy = []
+
     def set_clients(self, clientObj):
         for i, train_slow, send_slow in zip(range(self.num_clients), self.train_slow_clients, self.send_slow_clients):
             train_data = read_client_data(self.dataset, i, is_train=True)
@@ -128,6 +138,7 @@ class Server(object):
             client.send_time_cost['total_cost'] += 2 * (time.time() - start_time)
 
     def receive_models(self):
+        
         assert (len(self.selected_clients) > 0)
 
         active_clients = random.sample(
@@ -136,8 +147,26 @@ class Server(object):
         self.uploaded_ids = []
         self.uploaded_weights = []
         self.uploaded_models = []
+        
+        size = []
+        size_quantized = []
+        size_huffman = []
+
         tot_samples = 0
         for client in active_clients:
+            
+            client.quantize_dynamic()
+            client.dequantize_model()
+
+            size.append(calculate_model_size(client.model))
+            size_quantized.append(calculate_model_quantized_size(client.model))
+            size_huffman.append(calculate_model_encoding(client.model))
+
+            '''print(f'size: {calculate_model_size(client.model)}')
+            print(f'size (quantized): {calculate_model_quantized_size(client.model)}')
+            print(f'with huffman: {calculate_model_encoding(client.model)}')
+            print('----------------------------------------------------')
+'''
             try:
                 client_time_cost = client.train_time_cost['total_cost'] / client.train_time_cost['num_rounds'] + \
                         client.send_time_cost['total_cost'] / client.send_time_cost['num_rounds']
@@ -148,9 +177,34 @@ class Server(object):
                 self.uploaded_ids.append(client.id)
                 self.uploaded_weights.append(client.train_samples)
                 self.uploaded_models.append(client.model)
+            
+        self.size_client_global.append(np.mean(size))
+        self.size_client_global_quantized.append(np.mean(size_quantized))
+        self.size_client_global_huffman.append(np.mean(size_huffman))
+            
         for i, w in enumerate(self.uploaded_weights):
             self.uploaded_weights[i] = w / tot_samples
 
+    def calculate_entropy_with_grad(self):
+        all_params = torch.cat([
+                        param.reshape(-1)
+                        for layer in self.global_model.modules()
+                        if isinstance(layer, nn.Linear)  # Filtra apenas camadas lineares
+                        for param in layer.parameters()
+                    ])
+        # Criando os limites dos bins
+        min_val, max_val = all_params.min().item(), all_params.max().item()
+        
+        # Calculando o histograma (os valores são os centros dos bins)
+        hist = torch.histc(all_params, bins=2**8)
+        
+        # Normalizando para obter uma distribuição de probabilidade
+        hist_prob = hist / hist.sum()
+
+        # Calculando a entropia
+        entropy = -torch.sum(hist_prob * torch.log(hist_prob+1e-10))
+        return entropy
+    
     def aggregate_parameters(self):
         assert (len(self.uploaded_models) > 0)
 
@@ -198,6 +252,10 @@ class Server(object):
                 hf.create_dataset('rs_test_acc', data=self.rs_test_acc)
                 hf.create_dataset('rs_test_auc', data=self.rs_test_auc)
                 hf.create_dataset('rs_train_loss', data=self.rs_train_loss)
+                hf.create_dataset('rs_entropy', data=self.entropy)
+                hf.create_dataset('rs_size_model', data=self.size_model_global)
+                hf.create_dataset('rs_size_model_quantized', data=self.size_client_global_quantized)
+                hf.create_dataset('rs_size_model_huffman', data=self.size_model_global_huffman)
 
     def save_item(self, item, item_name):
         if not os.path.exists(self.save_folder_name):
