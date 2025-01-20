@@ -219,6 +219,25 @@ class Server(object):
         for server_param, client_param in zip(self.global_model.parameters(), client_model.parameters()):
             server_param.data += client_param.data.clone() * w
 
+    def quantize_global_dynamic(self):
+        """Quantiza o modelo, forma que é enviado para o servidor"""
+        net_quantized_dynamic = torch.ao.quantization.quantize_dynamic(
+            self.global_model,
+            {torch.nn.Linear},  # Camadas a serem quantizadas dinamicamente
+            dtype=torch.qint8  # Precisão
+        )
+        self.globlal_model_quantize = net_quantized_dynamic
+
+    def dequantize_global_model(self):
+        """dequantiza o modelo, realizada no servidor"""
+        for name_quantized, module_quantized in self.globlal_model_quantize.named_modules():
+            if isinstance(module_quantized, (torch.ao.nn.quantized.modules.Linear,
+                                             torch.ao.nn.quantized.dynamic.modules.Linear)):
+                for name, module in self.global_model.named_modules(): 
+                    if name_quantized == name:
+                        module.weight.data = module_quantized.weight().dequantize()
+                        module.bias.data = module_quantized.bias().dequantize()
+
     def save_global_model(self):
         model_path = os.path.join("models", self.dataset)
         if not os.path.exists(model_path):

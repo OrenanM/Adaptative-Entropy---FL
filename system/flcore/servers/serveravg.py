@@ -61,15 +61,18 @@ class FedAvg(Server):
                 self.call_dlg(i)
             self.aggregate_parameters()
 
-            size_global = calculate_model_size(client.model)
-            size_quantized = calculate_model_quantized_size(client.model)
-            size_huffman = calculate_model_encoding(client.model)
+            self.quantize_global_dynamic()
+            self.dequantize_global_model()
+            
+            size_global = calculate_model_size(self.global_model)
+            size_quantized = calculate_model_quantized_size(self.global_model)
+            size_huffman = calculate_model_encoding(self.global_model)
 
             self.size_model_global.append(size_global)
             self.size_model_global_quantized.append(size_quantized)
             self.size_model_global_huffman.append(size_huffman)
-            self.entropy.append(client.calculate_entropy_with_grad())
-            print(self.entropy)
+            self.entropy.append(client.calculate_entropy_with_grad().item())
+            print(self.size_model_global_huffman)
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])

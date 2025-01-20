@@ -25,8 +25,8 @@ def calculate_model_encoding(model):
 
                 for weight, f in zip(all_weights_np, counts):
                     size_model_enconding += len(huffman_table[weight])*f
-                print(f'table size {name}: {size_table/8}')
-                print(f'transmition size {name}: {size_model_enconding/8}')
+                #print(f'table size {name}: {size_table/8}')
+                #print(f'transmition size {name}: {size_model_enconding/8}')
                 total_size += (size_model_enconding + size_table)/8
 
         return total_size
