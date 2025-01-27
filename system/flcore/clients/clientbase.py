@@ -72,11 +72,8 @@ class Client(object):
 
     # Função para calcular a entropia usando PyTorch
     def calculate_entropy_with_grad(self):
-        all_params = torch.cat([
-                        param.reshape(-1)
-                        for layer in self.model.modules()
-                        if isinstance(layer, nn.Linear)  # Filtra apenas camadas lineares
-                        for param in layer.parameters()
+        all_params = torch.cat([param.reshape(-1)
+                        for param in self.model.parameters()
                     ])
         # Criando os limites dos bins
         min_val, max_val = all_params.min().item(), all_params.max().item()

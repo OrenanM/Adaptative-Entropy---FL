@@ -73,6 +73,7 @@ class FedAvg(Server):
             self.size_model_global_huffman.append(size_huffman)
             self.entropy.append(client.calculate_entropy_with_grad().item())
             print(self.size_model_global_huffman)
+            print(self.entropy)
 
             self.Budget.append(time.time() - s_t)
             print('-'*25, 'time cost', '-'*25, self.Budget[-1])

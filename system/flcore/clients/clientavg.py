@@ -57,11 +57,12 @@ class clientAVG(Client):
                 error = self.loss(output, y)
                 entropy = self.calculate_entropy_with_grad()
 
-                loss = error + entropy
+                loss = error + 0.5*entropy
 
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+
         # print(f'entropy: {entropy}')
         # self.model.cpu()
         # self.model_quantize = torch.ao.quantization.convert(net_prepared, inplace=False)
